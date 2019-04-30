@@ -38,6 +38,8 @@ def adjust_symbol(symbol):
         yahoo_symbol = '^HSCE'
     else:
         dts_symbol = symbol
+        if symbol == 'HSCEI':
+            symbol = symbol[:-1]
         yahoo_symbol = '^{}'.format(symbol)
     return dts_symbol, yahoo_symbol
 
