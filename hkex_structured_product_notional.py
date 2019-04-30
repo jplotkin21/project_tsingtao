@@ -23,7 +23,7 @@ USD_HKD_FX = 7.72
 
 def parse_args():
     parser = argparse.ArgumentParser(description='plot structured product notional traded')
-    parser.add_argument('symbol', type=str, choices=['HSI', 'HSCE'])
+    parser.add_argument('symbol', type=str)
     args = parser.parse_args()
 
     return args
