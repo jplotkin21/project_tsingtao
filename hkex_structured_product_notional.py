@@ -24,6 +24,7 @@ USD_HKD_FX = 7.72
 def parse_args():
     parser = argparse.ArgumentParser(description='plot structured product notional traded')
     parser.add_argument('symbol', type=str)
+    parser.add_argument('-i', '--issuers', action='store_true')
     args = parser.parse_args()
 
     return args
@@ -120,18 +121,23 @@ def main():
         exit(0)
 
     symbol_df.loc[:, 'index units traded'] = symbol_df.apply(lambda x: x['Volume'] / x['Ent. Ratio'], axis=1)
-    index_unit_ts = pd.DataFrame(symbol_df.groupby('Trade Date').sum()['index units traded'])
+
+    if args.issuers:
+        index_unit_ts = symbol_df.groupby(['Trade Date', 'Issuer']).sum()['index units traded']
+        index_unit_ts = index_unit_ts.unstack('Issuer')
+    else:
+        index_unit_ts = symbol_df.groupby('Trade Date').sum()['index units traded']
 
     start = index_unit_ts.index[0]
     end = index_unit_ts.index[-1]
 
     close_price_data = pdr.data.DataReader(yahoo_symbol, SOURCE, start, end)
 
-    symbol_volume_ts = index_unit_ts.join(close_price_data.Close, how='inner')
+    notional_df = index_unit_ts.multiply(close_price_data.Close, axis=0)
 
-    symbol_volume_ts.loc[:, 'Notional'] = symbol_volume_ts.apply(lambda x: x['index units traded']
-                                                                 * x['Close'] / USD_HKD_FX / 1e6, axis=1)
-    symbol_volume_ts['Notional'].plot(title='{} CBBC Daily Notional ($MM USD)'.format(args.symbol))
+    notional_df *= (1/(USD_HKD_FX*1e6))
+
+    notional_df.plot(title='{} CBBC Daily Notional Traded ($MM USD)'.format(args.symbol))
 
     plt.tight_layout()
     plt.show()
