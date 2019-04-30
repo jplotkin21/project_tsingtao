@@ -29,6 +29,19 @@ def parse_args():
     return args
 
 
+def adjust_symbol(symbol):
+    if symbol.isnumeric():
+        dts_symbol = '{:05d}'.format(int(symbol))
+        yahoo_symbol = '{:04d}.HK'.format(int(symbol))
+    elif symbol == 'HSCE':
+        dts_symbol = 'HSCEI'
+        yahoo_symbol = '^HSCE'
+    else:
+        dts_symbol = symbol
+        yahoo_symbol = '^{}'.format(symbol)
+    return dts_symbol, yahoo_symbol
+
+
 async def download_coroutine(session, url, data_dict):
     logging.info('attempting download of {}'.format(url))
     file_name = url.split('/')[-1]
@@ -81,7 +94,9 @@ async def get_data(loop, url_list, data_dict):
 
 def main():
     args = parse_args()
-    symbol = args.symbol.upper()
+    dts_symbol, yahoo_symbol = adjust_symbol(args.symbol.upper())
+    logging.info('symbol: {} being converted to {} for dts and {} for yahoo'.format(
+        args.symbol, dts_symbol, yahoo_symbol))
 
     file_urls = [HKEX_URL_ROOT.format(i) for i in range(1, 13)]
     data_dict = {}
@@ -96,10 +111,10 @@ def main():
     column_names = [v.replace('%', 'percent') for v in column_names]
     final_df.columns = column_names
 
-    symbol_df = final_df.loc[final_df.loc[:, 'Underlying'] == args.symbol, :]
+    symbol_df = final_df.loc[final_df.loc[:, 'Underlying'] == dts_symbol, :]
 
     if len(symbol_df) == 0:
-        logging.info('No CBBC volume for symbol {}'.format(symbol))
+        logging.info('No CBBC volume for symbol {}'.format(dts_symbol))
         exit(0)
 
     symbol_df.loc[:, 'index units traded'] = symbol_df.apply(lambda x: x['Volume'] / x['Ent. Ratio'], axis=1)
@@ -108,13 +123,13 @@ def main():
     start = index_unit_ts.index[0]
     end = index_unit_ts.index[-1]
 
-    close_price_data = pdr.data.DataReader('^{}'.format(symbol), SOURCE, start, end)
+    close_price_data = pdr.data.DataReader(yahoo_symbol, SOURCE, start, end)
 
     symbol_volume_ts = index_unit_ts.join(close_price_data.Close, how='inner')
 
     symbol_volume_ts.loc[:, 'Notional'] = symbol_volume_ts.apply(lambda x: x['index units traded']
                                                                  * x['Close'] / USD_HKD_FX / 1e6, axis=1)
-    symbol_volume_ts['Notional'].plot(title='{} CBBC Daily Notional ($MM USD)'.format(symbol))
+    symbol_volume_ts['Notional'].plot(title='{} CBBC Daily Notional ($MM USD)'.format(args.symbol))
 
     plt.tight_layout()
     plt.show()
