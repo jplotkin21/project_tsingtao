@@ -21,10 +21,16 @@ SOURCE = 'yahoo'
 USD_HKD_FX = 7.72
 
 
+def str_lower(string):
+    return string.lower()
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='plot structured product notional traded')
     parser.add_argument('symbol', type=str)
     parser.add_argument('-i', '--issuers', action='store_true')
+    parser.add_argument('-v', '--value', type=str_lower, default='notional',
+                        choices=('contracts', 'notional', 'turnover'))
     args = parser.parse_args()
 
     return args
@@ -114,6 +120,8 @@ def main():
     column_names = [v.replace('%', 'percent') for v in column_names]
     final_df.columns = column_names
 
+    logging.info('available columns: {}'.format(final_df.columns))
+
     symbol_df = final_df.loc[final_df.loc[:, 'Underlying'] == dts_symbol, :]
 
     if len(symbol_df) == 0:
@@ -123,21 +131,31 @@ def main():
     symbol_df.loc[:, 'index units traded'] = symbol_df.apply(lambda x: x['Volume'] / x['Ent. Ratio'], axis=1)
 
     if args.issuers:
-        index_unit_ts = symbol_df.groupby(['Trade Date', 'Issuer']).sum()['index units traded']
+        index_unit_ts = symbol_df.groupby(['Trade Date', 'Issuer']).sum()
+        index_unit_ts = index_unit_ts.loc[:, ['index units traded', 'Volume', 'Turnover']]
         index_unit_ts = index_unit_ts.unstack('Issuer')
     else:
-        index_unit_ts = symbol_df.groupby('Trade Date').sum()['index units traded']
+        index_unit_ts = symbol_df.groupby('Trade Date').sum()
+        index_unit_ts = index_unit_ts.loc[:, ['index units traded', 'Volume', 'Turnover']]
 
     start = index_unit_ts.index[0]
     end = index_unit_ts.index[-1]
 
-    close_price_data = pdr.data.DataReader(yahoo_symbol, SOURCE, start, end)
+    if args.value == 'notional':
+        close_price_data = pdr.data.DataReader(yahoo_symbol, SOURCE, start, end)
 
-    notional_df = index_unit_ts.multiply(close_price_data.Close, axis=0)
+        notional_df = index_unit_ts.loc[:, 'index units traded'] * close_price_data.Close
 
-    notional_df *= (1/(USD_HKD_FX*1e6))
+        notional_df *= (1/(USD_HKD_FX*1e6))
 
-    notional_df.plot(title='{} CBBC Daily Notional Traded ($MM USD)'.format(args.symbol))
+        notional_df.plot(title='{} CBBC Daily Notional Traded ($MM USD)'.format(args.symbol))
+
+    elif args.value == 'contracts':
+        index_unit_ts['Volume'].plot(title='{} CBBC Daily Volume'.format(args.symbol))
+    elif args.value == 'turnover':
+        index_unit_ts['Turnover'].apply(lambda x: x / USD_HKD_FX / 1e6).plot(
+            title='{} CBBC Daily Turnover Traded ($MM USD)'.format(args.symbol)
+        )
 
     plt.tight_layout()
     plt.show()
