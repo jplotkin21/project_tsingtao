@@ -28,9 +28,11 @@ def str_lower(string):
 def parse_args():
     parser = argparse.ArgumentParser(description='plot structured product notional traded')
     parser.add_argument('symbol', type=str)
-    parser.add_argument('-i', '--issuers', action='store_true')
+    parser.add_argument('-i', '--issuers', action='store_true',
+                        help='display issuers')
     parser.add_argument('-v', '--value', type=str_lower, default='notional',
-                        choices=('contracts', 'notional', 'turnover'))
+                        choices=('contracts', 'notional', 'turnover'),
+                        help='value to display. default: notional')
     args = parser.parse_args()
 
     return args
@@ -143,8 +145,10 @@ def main():
 
     if args.value == 'notional':
         close_price_data = pdr.data.DataReader(yahoo_symbol, SOURCE, start, end)
-
-        notional_df = index_unit_ts.loc[:, 'index units traded'] * close_price_data.Close
+        close_price_data.index.rename('Trade Date', inplace=True)
+        notional_df = index_unit_ts.loc[:, 'index units traded'].multiply(
+                        close_price_data.Close,
+                        axis=0)
 
         notional_df *= (1/(USD_HKD_FX*1e6))
 
